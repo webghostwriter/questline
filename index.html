@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Questline</title>
+<meta name="theme-color" content="#4f46e5">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--a:#4f46e5;--a2:#eef2ff;--bg:#f7f7fb;--c:#fff;--t:#1f2937;--m:#6b7280;--b:#e5e7eb;--btn:#fff}
+@media(prefers-color-scheme:dark){:root{--a:#818cf8;--a2:#252a4a;--bg:#0f1020;--c:#181a30;--t:#eef0ff;--m:#a0a4c4;--b:#2a2d4d;--btn:#0f1020}.late{background:#4a1d1d!important;color:#fca5a5!important}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--t);padding:16px 14px 90px;display:flex;justify-content:center}
+.app{width:100%;max-width:440px}
+h2{font-size:15px;margin-bottom:10px}
+.card{background:var(--c);border:1px solid var(--b);border-radius:16px;padding:16px;margin-bottom:14px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.lvl{font-size:22px;font-weight:700;color:var(--a)}
+.m{font-size:12.5px;color:var(--m)}
+.bar{height:10px;background:var(--a2);border-radius:5px;overflow:hidden;margin-top:10px}
+.bar i{display:block;height:100%;background:var(--a);width:0;transition:width .3s}
+button{font:inherit;cursor:pointer}
+.pri{width:100%;padding:13px;border:0;border-radius:12px;background:var(--a);color:var(--btn);font-weight:700;margin-top:14px}
+.sec{padding:11px 16px;border:0;border-radius:10px;background:var(--a2);color:var(--a);font-weight:600;margin-top:10px}
+.task{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--b)}
+#tdy .task:first-child{border-top:0}
+.chk{width:30px;height:30px;border-radius:9px;border:2px solid var(--a);background:none;color:var(--btn);flex:none;font-size:17px;line-height:1}
+.task.done .chk{background:var(--a)}
+.task.done .tt{text-decoration:line-through;color:var(--m)}
+.late{font-size:11px;background:#fee2e2;color:#b91c1c;border-radius:6px;padding:2px 6px;margin-left:6px}
+.st{font-size:13.5px;display:flex;justify-content:space-between;padding:4px 0}
+.del{background:none;border:0;color:var(--m);font-size:12px;text-decoration:underline;margin-top:10px}
+label{display:block;font-size:12.5px;color:var(--m);margin:12px 0 5px}
+input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--b);border-radius:10px;background:var(--bg);color:var(--t);font:inherit;font-size:15px}
+textarea{min-height:84px;resize:vertical}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--a);color:var(--btn);padding:12px 18px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;white-space:pre-line;text-align:center;max-width:90%;z-index:9}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="card">
+<div class="row"><div><div class="lvl" id="lv">Level 1</div><div class="m" id="xt">0 XP</div></div><div id="sk" style="font-weight:600">0 day streak</div></div>
+<div class="bar"><i id="xb"></i></div>
+</div>
+<div class="card" id="cch"></div>
+<div class="card"><h2>Today</h2><div id="tdy"></div></div>
+<h2 style="margin:4px 2px 10px">Goals</h2>
+<div id="gls"></div>
+<div class="card">
+<h2>New goal</h2>
+<form id="f">
+<label for="gt">What do you want to achieve?</label>
+<input id="gt" maxlength="80" placeholder="e.g. Learn JavaScript basics">
+<label for="gd">Deadline</label>
+<input id="gd" type="date">
+<label for="gp">Work days per week</label>
+<select id="gp"><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option></select>
+<label for="gs">Milestones, one per line (optional)</label>
+<textarea id="gs" placeholder="Leave empty and I will use a default plan"></textarea>
+<button class="pri" type="submit">Break it down for me</button>
+</form>
+</div>
+</div>
+<div class="toast" id="ts"></div>
+<script>
+const KEY='questline_v1',$=i=>document.getElementById(i);
+let S=load();
+function load(){try{return Object.assign({goals:[],level:1},JSON.parse(localStorage.getItem(KEY))||{})}catch(e){return{goals:[],level:1}}}
+function save(){localStorage.setItem(KEY,JSON.stringify(S))}
+const pad=n=>String(n).padStart(2,'0');
+const ds=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const TD=()=>ds(new Date());
+const parse=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const fmt=s=>parse(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const DAYS={7:[0,1,2,3,4,5,6],6:[1,2,3,4,5,6],5:[1,2,3,4,5],4:[1,2,4,5],3:[1,3,5],2:[2,5],1:[3]};
+const DEFAULT_STEPS=['Define the finish line','Learn what you need','Build the first version','Improve and fix','Finish and review'];
+let tq=[],tt;
+function toast(m){tq.push(m);$('ts').textContent=tq.join('\n');$('ts').classList.add('show');clearTimeout(tt);tt=setTimeout(()=>{$('ts').classList.remove('show');tq=[]},2800)}
+
+function workDays(deadline,perWeek){
+ const out=[],end=parse(deadline);
+ for(let d=parse(TD());d<=end;d.setDate(d.getDate()+1))if(DAYS[perWeek].includes(d.getDay()))out.push(ds(d));
+ if(!out.length)for(let d=parse(TD());d<=end;d.setDate(d.getDate()+1))out.push(ds(d));
+ return out;
+}
+function place(items,days){items.forEach((t,i)=>{t.date=days[Math.min(Math.floor(i*days.length/items.length),days.length-1)]})}
+function makeGoal(title,deadline,perWeek,names){
+ const days=workDays(deadline,perWeek);
+ if(!days.length)return null;
+ const steps=names.map(n=>({id:uid(),name:n}));
+ const total=Math.min(150,Math.max(days.length,steps.length));
+ const base=Math.floor(total/steps.length),extra=total%steps.length,tasks=[];
+ steps.forEach((s,i)=>{const n=base+(i<extra?1:0);for(let k=1;k<=n;k++)tasks.push({id:uid(),stepId:s.id,title:n>1?`${s.name} (${k}/${n})`:s.name,done:false,doneOn:null})});
+ place(tasks,days);
+ return{id:uid(),title,deadline,perWeek,steps,tasks};
+}
+function rebalance(g){
+ const days=workDays(g.deadline,g.perWeek),pend=g.tasks.filter(t=>!t.done);
+ if(!days.length||!pend.length)return false;
+ place(pend,days);return true;
+}
+const all=()=>S.goals.flatMap(g=>g.tasks.map(t=>({g,t})));
+const stepDone=(g,s)=>{const ts=g.tasks.filter(t=>t.stepId===s.id);return ts.length>0&&ts.every(t=>t.done)};
+function xp(){let x=0;S.goals.forEach(g=>{x+=g.tasks.filter(t=>t.done).length*10;g.steps.forEach(s=>{if(stepDone(g,s))x+=50});if(g.tasks.every(t=>t.done))x+=200});return x}
+const lvlOf=x=>Math.floor(Math.sqrt(x/40))+1;
+function streak(){
+ const set=new Set(all().filter(o=>o.t.done&&o.t.doneOn).map(o=>o.t.doneOn));
+ const d=new Date();if(!set.has(ds(d)))d.setDate(d.getDate()-1);
+ let n=0;while(set.has(ds(d))){n++;d.setDate(d.getDate()-1)}return n;
+}
+function coach(){
+ const t=TD(),a=all();
+ if(!S.goals.length)return{msg:'Create your first goal below and I will break it into daily tasks.'};
+ const over=a.filter(o=>!o.t.done&&o.t.date<t);
+ if(over.length)return{msg:`${over.length} missed task${over.length>1?'s':''}. Rebalance spreads what is left across the days before your deadline so nothing piles up.`,act:'Rebalance my plans',fn:()=>{let ok=false;S.goals.forEach(g=>{if(g.tasks.some(x=>!x.done&&x.date<t))ok=rebalance(g)||ok});save();render();toast(ok?'Plans rebalanced':'No days left before that deadline')}};
+ const td=a.filter(o=>o.t.date===t),pend=td.filter(o=>!o.t.done);
+ if(pend.length)return{msg:`${pend.length} task${pend.length>1?'s':''} today. Start with: ${pend[0].t.title}`};
+ if(td.length){const s=streak();return{msg:`All done for today. Streak: ${s} day${s===1?'':'s'}. See you tomorrow.`}}
+ const nx=a.filter(o=>!o.t.done).sort((x,y)=>x.t.date.localeCompare(y.t.date))[0];
+ return{msg:nx?`Rest day. Your next task is on ${fmt(nx.t.date)}.`:'All goals complete. Time for a new one.'};
+}
+function toggle(id){
+ const o=all().find(o=>o.t.id===id);if(!o)return;
+ const{g,t}=o;t.done=!t.done;t.doneOn=t.done?TD():null;save();
+ if(t.done){const s=g.steps.find(s=>s.id===t.stepId);
+  if(g.tasks.every(x=>x.done))toast('Goal complete! +200 XP 🏆');
+  else if(stepDone(g,s))toast(`Milestone done: ${s.name} +50 XP`)}
+ render();
+}
+function render(){
+ const x=xp(),L=lvlOf(x),b=40*(L-1)**2,n=40*L*L,t=TD();
+ if(L>S.level)toast(`Level up! You reached level ${L} 🎉`);
+ if(L!==S.level){S.level=L;save()}
+ $('lv').textContent=`Level ${L}`;$('xt').textContent=`${x} / ${n} XP`;$('xb').style.width=((x-b)/(n-b)*100)+'%';
+ $('sk').textContent=`🔥 ${streak()} day streak`;
+ const c=coach();$('cch').innerHTML=`<p>${esc(c.msg)}</p>`;
+ if(c.act){const bt=document.createElement('button');bt.className='sec';bt.textContent=c.act;bt.onclick=c.fn;$('cch').appendChild(bt)}
+ const rows=all().filter(o=>(!o.t.done&&o.t.date<=t)||(o.t.done&&o.t.doneOn===t)).sort((p,q)=>p.t.done-q.t.done||p.t.date.localeCompare(q.t.date));
+ $('tdy').innerHTML=rows.length?rows.map(o=>`<div class="task ${o.t.done?'done':''}"><button class="chk" data-t="${o.t.id}" aria-label="Toggle task">${o.t.done?'✓':''}</button><div><div class="tt">${esc(o.t.title)}${!o.t.done&&o.t.date<t?'<span class="late">missed</span>':''}</div><div class="m">${esc(o.g.title)}</div></div></div>`).join(''):'<p class="m">Nothing due today.</p>';
+ $('gls').innerHTML=S.goals.map(g=>{const d=g.tasks.filter(k=>k.done).length,N=g.tasks.length;
+  return `<div class="card"><div class="row"><b>${esc(g.title)}</b><span class="m">by ${fmt(g.deadline)}</span></div><div class="bar"><i style="width:${d/N*100}%"></i></div><div class="m" style="margin:6px 0 8px">${d}/${N} tasks</div>${g.steps.map(s=>{const ts=g.tasks.filter(k=>k.stepId===s.id);return `<div class="st"><span>${stepDone(g,s)?'✅':'⬜'} ${esc(s.name)}</span><span class="m">${ts.filter(k=>k.done).length}/${ts.length}</span></div>`}).join('')}<button class="del" data-del="${g.id}">Delete goal</button></div>`}).join('');
+}
+document.addEventListener('click',e=>{
+ const c=e.target.closest('[data-t]');if(c)return toggle(c.dataset.t);
+ const d=e.target.closest('[data-del]');
+ if(d&&confirm('Delete this goal and all its tasks?')){S.goals=S.goals.filter(g=>g.id!==d.dataset.del);save();render()}
+});
+$('f').addEventListener('submit',e=>{
+ e.preventDefault();
+ const title=$('gt').value.trim(),dl=$('gd').value;
+ if(!title||!dl)return toast('Add a goal and a deadline');
+ if(dl<TD())return toast('Pick a deadline from today onwards');
+ const names=$('gs').value.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,20);
+ const g=makeGoal(title,dl,+$('gp').value,names.length?names:DEFAULT_STEPS);
+ if(!g)return toast('No work days before that deadline');
+ S.goals.push(g);save();$('f').reset();render();toast(`Plan ready: ${g.tasks.length} tasks`);scrollTo({top:0,behavior:'smooth'});
+});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)render()});
+$('gd').min=TD();
+render();
+if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+</script>
+</body>
+</html>
